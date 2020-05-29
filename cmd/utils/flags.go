@@ -61,6 +61,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/netutil"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/ethereum/go-ethereum/statediff"
 	whisper "github.com/ethereum/go-ethereum/whisper/whisperv6"
 	pcsclite "github.com/gballet/go-libpcsclite"
 	cli "gopkg.in/urfave/cli.v1"
@@ -722,6 +723,15 @@ var (
 		Usage: "External EVM configuration (default = built-in interpreter)",
 		Value: "",
 	}
+
+	StateDiffFlag = cli.BoolFlag{
+		Name:  "statediff",
+		Usage: "Enables the processing of state diffs between each block",
+	}
+	StateDiffWatchedAddresses = cli.StringSliceFlag{
+		Name:  "statediff.watchedaddresses",
+		Usage: "If provided, state diffing process is restricted to these addresses",
+	}
 )
 
 // MakeDataDir retrieves the currently requested data directory, terminating
@@ -984,6 +994,9 @@ func setWS(ctx *cli.Context, cfg *node.Config) {
 	}
 	if ctx.GlobalIsSet(WSApiFlag.Name) {
 		cfg.WSModules = splitAndTrim(ctx.GlobalString(WSApiFlag.Name))
+	}
+	if ctx.GlobalBool(StateDiffFlag.Name) {
+		cfg.WSModules = append(cfg.WSModules, "statediff")
 	}
 }
 
@@ -1691,6 +1704,22 @@ func RegisterGraphQLService(stack *node.Node, endpoint string, cors, vhosts []st
 		return nil, errors.New("no Ethereum service")
 	}); err != nil {
 		Fatalf("Failed to register the GraphQL service: %v", err)
+	}
+}
+
+// RegisterStateDiffService configures and registers a service to stream state diff data over RPC
+func RegisterStateDiffService(stack *node.Node, ctx *cli.Context) {
+	config := statediff.Config{
+		WatchedAddresses: ctx.GlobalStringSlice(StateDiffWatchedAddresses.Name),
+	}
+	if err := stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
+		var ethServ *eth.Ethereum
+		ctx.Service(&ethServ)
+		chainDb := ethServ.ChainDb()
+		blockChain := ethServ.BlockChain()
+		return statediff.NewStateDiffService(chainDb, blockChain, config)
+	}); err != nil {
+		Fatalf("Failed to register State Diff Service", err)
 	}
 }
 

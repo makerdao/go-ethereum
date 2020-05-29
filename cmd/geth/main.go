@@ -152,6 +152,8 @@ var (
 		utils.LegacyGpoPercentileFlag,
 		utils.EWASMInterpreterFlag,
 		utils.EVMInterpreterFlag,
+		utils.StateDiffFlag,
+		utils.StateDiffWatchedAddresses,
 		configFileFlag,
 	}
 

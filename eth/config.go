@@ -64,6 +64,7 @@ var DefaultConfig = Config{
 		Blocks:     20,
 		Percentile: 60,
 	},
+	StateDiff: false,
 }
 
 func init() {
@@ -164,4 +165,7 @@ type Config struct {
 
 	// CheckpointOracle is the configuration for checkpoint oracle.
 	CheckpointOracle *params.CheckpointOracleConfig `toml:",omitempty"`
+
+	// If node should be run with the StateDiff service turned on
+	StateDiff bool `toml:",omitempty"`
 }
