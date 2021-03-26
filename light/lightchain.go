@@ -396,24 +396,26 @@ func (lc *LightChain) InsertHeaderChain(chain []*types.Header, checkFreq int) (i
 	lc.wg.Add(1)
 	defer lc.wg.Done()
 
-	var events []interface{}
-	whFunc := func(header *types.Header) error {
-		status, err := lc.hc.WriteHeader(header)
-
-		switch status {
-		case core.CanonStatTy:
-			log.Debug("Inserted new header", "number", header.Number, "hash", header.Hash())
-			events = append(events, core.ChainEvent{Block: types.NewBlockWithHeader(header), Hash: header.Hash()})
-
-		case core.SideStatTy:
-			log.Debug("Inserted forked header", "number", header.Number, "hash", header.Hash())
-			events = append(events, core.ChainSideEvent{Block: types.NewBlockWithHeader(header)})
-		}
-		return err
+	status, err := lc.hc.InsertHeaderChain(chain, start)
+	if err != nil || len(chain) == 0 {
+		return 0, err
 	}
-	i, err := lc.hc.InsertHeaderChain(chain, whFunc, start)
+
+	// Create chain event for the new head block of this insertion.
+	var (
+		events     = make([]interface{}, 0, 1)
+		lastHeader = chain[len(chain)-1]
+		block      = types.NewBlockWithHeader(lastHeader)
+	)
+	switch status {
+	case core.CanonStatTy:
+		events = append(events, core.ChainEvent{Block: block, Hash: block.Hash()})
+	case core.SideStatTy:
+		events = append(events, core.ChainSideEvent{Block: block})
+	}
 	lc.postChainEvents(events)
-	return i, err
+
+	return 0, err
 }
 
 // CurrentHeader retrieves the current head header of the canonical chain. The
@@ -568,6 +570,12 @@ func (lc *LightChain) SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscript
 // SubscribeRemovedLogsEvent implements the interface of filters.Backend
 // LightChain does not send core.RemovedLogsEvent, so return an empty subscription.
 func (lc *LightChain) SubscribeRemovedLogsEvent(ch chan<- core.RemovedLogsEvent) event.Subscription {
+	return lc.scope.Track(new(event.Feed).Subscribe(ch))
+}
+
+// SubscribeStateChangeEvent implements the interface of filters.Backend
+// LightChain does not send core.StateChangeEvent, so return an empty subscription.
+func (lc *LightChain) SubscribeStateChangeEvent(ch chan<- core.StateChangeEvent) event.Subscription {
 	return lc.scope.Track(new(event.Feed).Subscribe(ch))
 }
 

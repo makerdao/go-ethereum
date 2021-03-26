@@ -40,9 +40,10 @@ import (
 )
 
 type LesApiBackend struct {
-	extRPCEnabled bool
-	eth           *LightEthereum
-	gpo           *gasprice.Oracle
+	extRPCEnabled       bool
+	allowUnprotectedTxs bool
+	eth                 *LightEthereum
+	gpo                 *gasprice.Oracle
 }
 
 func (b *LesApiBackend) ChainConfig() *params.ChainConfig {
@@ -171,8 +172,9 @@ func (b *LesApiBackend) GetTd(ctx context.Context, hash common.Hash) *big.Int {
 }
 
 func (b *LesApiBackend) GetEVM(ctx context.Context, msg core.Message, state *state.StateDB, header *types.Header) (*vm.EVM, func() error, error) {
-	context := core.NewEVMContext(msg, header, b.eth.blockchain, nil)
-	return vm.NewEVM(context, state, b.eth.chainConfig, vm.Config{}), state.Error, nil
+	txContext := core.NewEVMTxContext(msg)
+	context := core.NewEVMBlockContext(header, b.eth.blockchain, nil)
+	return vm.NewEVM(context, txContext, state, b.eth.chainConfig, vm.Config{}), state.Error, nil
 }
 
 func (b *LesApiBackend) SendTx(ctx context.Context, signedTx *types.Transaction) error {
@@ -238,6 +240,10 @@ func (b *LesApiBackend) SubscribeRemovedLogsEvent(ch chan<- core.RemovedLogsEven
 	return b.eth.blockchain.SubscribeRemovedLogsEvent(ch)
 }
 
+func (b *LesApiBackend) SubscribeStateChangeEvent(ch chan<- core.StateChangeEvent) event.Subscription {
+	return b.eth.blockchain.SubscribeStateChangeEvent(ch)
+}
+
 func (b *LesApiBackend) Downloader() *downloader.Downloader {
 	return b.eth.Downloader()
 }
@@ -260,6 +266,10 @@ func (b *LesApiBackend) AccountManager() *accounts.Manager {
 
 func (b *LesApiBackend) ExtRPCEnabled() bool {
 	return b.extRPCEnabled
+}
+
+func (b *LesApiBackend) UnprotectedAllowed() bool {
+	return b.allowUnprotectedTxs
 }
 
 func (b *LesApiBackend) RPCGasCap() uint64 {
@@ -290,4 +300,16 @@ func (b *LesApiBackend) Engine() consensus.Engine {
 
 func (b *LesApiBackend) CurrentHeader() *types.Header {
 	return b.eth.blockchain.CurrentHeader()
+}
+
+func (b *LesApiBackend) StateAtBlock(ctx context.Context, block *types.Block, reexec uint64) (*state.StateDB, func(), error) {
+	return b.eth.stateAtBlock(ctx, block, reexec)
+}
+
+func (b *LesApiBackend) StatesInRange(ctx context.Context, fromBlock *types.Block, toBlock *types.Block, reexec uint64) ([]*state.StateDB, func(), error) {
+	return b.eth.statesInRange(ctx, fromBlock, toBlock, reexec)
+}
+
+func (b *LesApiBackend) StateAtTransaction(ctx context.Context, block *types.Block, txIndex int, reexec uint64) (core.Message, vm.BlockContext, *state.StateDB, func(), error) {
+	return b.eth.stateAtTransaction(ctx, block, txIndex, reexec)
 }
